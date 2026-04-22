@@ -53,14 +53,18 @@ func (a *AnomalyDetector) Observe(host string, now time.Time) {
 		st = &hostState{windowStart: now}
 		a.hosts[host] = st
 	}
-	if now.Sub(st.windowStart) >= anomalyWindow {
+	// Advance one 60s window at a time, not straight to `now`. An idle host
+	// that reappears after 10 minutes must pay 10 windows of decay so the
+	// baseline drops toward zero — otherwise a stale-but-high baseline masks
+	// real spikes.
+	for now.Sub(st.windowStart) >= anomalyWindow {
 		if st.baseline == 0 {
 			st.baseline = float64(st.count)
 		} else {
 			st.baseline = emaAlpha*float64(st.count) + (1-emaAlpha)*st.baseline
 		}
 		st.count = 0
-		st.windowStart = now
+		st.windowStart = st.windowStart.Add(anomalyWindow)
 	}
 	st.count++
 	if st.baseline > 0 && float64(st.count) > a.multiplier*st.baseline {

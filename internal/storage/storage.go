@@ -60,21 +60,17 @@ type Store struct {
 }
 
 func Open(path string, bufSize, flushSize, flushIntervalSec int, logger *slog.Logger) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	// Pragmas travel via the DSN so they apply to every connection the pool
+	// opens, not just the first one. synchronous and busy_timeout are
+	// per-connection in SQLite; without this, concurrent readers (web handlers)
+	// can race the writer and get SQLITE_BUSY.
+	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)", path)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(2)
-	for _, pragma := range []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA busy_timeout=5000",
-	} {
-		if _, err := db.Exec(pragma); err != nil {
-			logger.Warn("pragma failed", "pragma", pragma, "err", err)
-		}
-	}
 	if _, err := db.ExecContext(context.Background(), schemaSQL); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("schema init: %w", err)
