@@ -1,0 +1,373 @@
+# PiSIEM detection rules
+#
+# Each rule:
+#   condition.match       — substring matched against the event's `message`
+#   condition.threshold   — trigger when matched N times...
+#   condition.timeframe   — ...within this many seconds, per host
+#   condition.source      — (optional) "syslog" | "agent". Empty = any.
+#   condition.source_file — (optional) substring of source_file (agent only).
+#   condition.host        — (optional) substring of host/IP. Empty = any.
+#
+# message_template vars: {{.host}} {{.count}} {{.message}} {{.severity}} {{.source}}
+#
+# Leave webhook_url empty for log-only (still fires to stdout/slog on match).
+
+rules:
+
+  # ───────────────────────────────────────────────
+  # LINUX / UNIX — SSH (sshd via syslog)
+  # ───────────────────────────────────────────────
+  - id: ssh_brute_force
+    name: "SSH Failed Login Spike"
+    condition:
+      match: "Failed password"
+      threshold: 5
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} failed SSH logins from {{.host}}"
+
+  - id: ssh_invalid_user
+    name: "SSH Invalid User Attempt"
+    condition:
+      match: "Invalid user"
+      threshold: 3
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} invalid SSH usernames probed on {{.host}}"
+
+  - id: ssh_accepted_login
+    name: "SSH Successful Login"
+    condition:
+      match: "Accepted"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Info: successful SSH login on {{.host}} — {{.message}}"
+
+  - id: ssh_root_login
+    name: "SSH Root Login Attempt"
+    condition:
+      match: "for root from"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: SSH root login event on {{.host}} — {{.message}}"
+
+  - id: ssh_disconnect_auth_fail
+    name: "SSH Too Many Auth Failures"
+    condition:
+      match: "Disconnecting: Too many authentication failures"
+      threshold: 2
+      timeframe: 120
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} SSH auth-fail disconnects on {{.host}}"
+
+  # ───────────────────────────────────────────────
+  # LINUX — sudo / su / PAM
+  # ───────────────────────────────────────────────
+  - id: sudo_usage
+    name: "Sudo Command Executed"
+    condition:
+      match: "sudo"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Info: sudo used on {{.host}} — {{.message}}"
+
+  - id: sudo_auth_fail
+    name: "Sudo Authentication Failure"
+    condition:
+      match: "authentication failure"
+      threshold: 3
+      timeframe: 120
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} PAM auth failures on {{.host}}"
+
+  - id: su_failed
+    name: "su FAILED"
+    condition:
+      match: "FAILED su"
+      threshold: 2
+      timeframe: 120
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: failed su attempts on {{.host}}"
+
+  - id: user_added
+    name: "New User Added"
+    condition:
+      match: "new user"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: new user added on {{.host}} — {{.message}}"
+
+  - id: user_group_changed
+    name: "User Added To Group"
+    condition:
+      match: "add 'root'"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: privilege escalation (root group) on {{.host}} — {{.message}}"
+
+  # ───────────────────────────────────────────────
+  # LINUX — kernel / systemd
+  # ───────────────────────────────────────────────
+  - id: oom_killer
+    name: "OOM Killer Invoked"
+    condition:
+      match: "Out of memory: Kill process"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: OOM killer on {{.host}} — {{.message}}"
+
+  - id: kernel_segfault
+    name: "Process Segfault"
+    condition:
+      match: "segfault at"
+      threshold: 3
+      timeframe: 300
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} segfaults on {{.host}}"
+
+  - id: systemd_unit_failed
+    name: "systemd Unit Failed"
+    condition:
+      match: "Failed to start"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: unit failed on {{.host}} — {{.message}}"
+
+  - id: apparmor_denied
+    name: "AppArmor DENIED"
+    condition:
+      match: "apparmor=\"DENIED\""
+      threshold: 3
+      timeframe: 300
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} AppArmor denials on {{.host}}"
+
+  # ───────────────────────────────────────────────
+  # LINUX — cron / package management
+  # ───────────────────────────────────────────────
+  - id: cron_failed
+    name: "Cron Job Failed"
+    condition:
+      match: "(FAILED)"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: cron failure on {{.host}} — {{.message}}"
+
+  - id: package_install
+    name: "APT / dpkg Package Install"
+    condition:
+      match: "status installed"
+      threshold: 1
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Info: package installed on {{.host}} — {{.message}}"
+
+  # ───────────────────────────────────────────────
+  # NETWORK / FIREWALL (UFW, pfSense, OPNsense)
+  # ───────────────────────────────────────────────
+  - id: ufw_block
+    name: "UFW Blocked Inbound"
+    condition:
+      match: "UFW BLOCK"
+      threshold: 20
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} UFW blocks on {{.host}} in 60s"
+
+  - id: pfsense_block
+    name: "pfSense Filter Block"
+    condition:
+      match: "filterlog"
+      threshold: 50
+      timeframe: 60
+      source: "syslog"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} pfSense filter blocks from {{.host}}"
+
+  # ───────────────────────────────────────────────
+  # WEB (nginx / apache via agent tailing access.log)
+  # ───────────────────────────────────────────────
+  - id: web_5xx_burst
+    name: "HTTP 5xx Burst"
+    condition:
+      match: " 500 "
+      threshold: 10
+      timeframe: 60
+      source: "agent"
+      source_file: "access.log"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} HTTP 500 responses on {{.host}}"
+
+  - id: web_401_brute
+    name: "HTTP 401 Brute Force"
+    condition:
+      match: " 401 "
+      threshold: 20
+      timeframe: 60
+      source: "agent"
+      source_file: "access.log"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} HTTP 401 on {{.host}} in 60s"
+
+  - id: web_sql_injection
+    name: "SQL Injection Attempt"
+    condition:
+      match: "UNION SELECT"
+      threshold: 1
+      timeframe: 60
+      source: "agent"
+      source_file: "access.log"
+    action:
+      webhook_url: ""
+      message_template: "Alert: SQLi pattern on {{.host}} — {{.message}}"
+
+  - id: web_path_traversal
+    name: "Path Traversal Attempt"
+    condition:
+      match: "../"
+      threshold: 1
+      timeframe: 60
+      source: "agent"
+      source_file: "access.log"
+    action:
+      webhook_url: ""
+      message_template: "Alert: path traversal on {{.host}} — {{.message}}"
+
+  # ───────────────────────────────────────────────
+  # AGENT — /var/log/auth.log (Debian/Ubuntu)
+  # ───────────────────────────────────────────────
+  - id: agent_auth_pam_fail
+    name: "PAM Auth Failure (agent auth.log)"
+    condition:
+      match: "authentication failure"
+      threshold: 3
+      timeframe: 120
+      source: "agent"
+      source_file: "auth.log"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} PAM failures on {{.host}} (auth.log)"
+
+  # ───────────────────────────────────────────────
+  # WINDOWS (agent shipping Security event log / text export)
+  # Note: agents that tail .evtx directly ship binary lines — configure
+  # the agent to watch an exported text log (e.g. a PowerShell scheduled
+  # task emits Security events to a plain-text file).
+  # ───────────────────────────────────────────────
+  - id: win_event_4625
+    name: "Windows Failed Logon (Event 4625)"
+    condition:
+      match: "4625"
+      threshold: 5
+      timeframe: 120
+      source: "agent"
+      source_file: "Security"
+    action:
+      webhook_url: ""
+      message_template: "Alert: {{.count}} Windows failed logons on {{.host}}"
+
+  - id: win_event_4720
+    name: "Windows Account Created (Event 4720)"
+    condition:
+      match: "4720"
+      threshold: 1
+      timeframe: 60
+      source: "agent"
+      source_file: "Security"
+    action:
+      webhook_url: ""
+      message_template: "Alert: Windows account created on {{.host}}"
+
+  - id: win_event_4724
+    name: "Windows Password Reset (Event 4724)"
+    condition:
+      match: "4724"
+      threshold: 1
+      timeframe: 60
+      source: "agent"
+      source_file: "Security"
+    action:
+      webhook_url: ""
+      message_template: "Alert: Windows password reset on {{.host}}"
+
+  - id: win_event_4732
+    name: "Windows User Added To Privileged Group (Event 4732)"
+    condition:
+      match: "4732"
+      threshold: 1
+      timeframe: 60
+      source: "agent"
+      source_file: "Security"
+    action:
+      webhook_url: ""
+      message_template: "Alert: privileged group membership change on {{.host}}"
+
+  - id: win_event_1102
+    name: "Windows Audit Log Cleared (Event 1102)"
+    condition:
+      match: "1102"
+      threshold: 1
+      timeframe: 60
+      source: "agent"
+      source_file: "Security"
+    action:
+      webhook_url: ""
+      message_template: "Alert: Windows audit log cleared on {{.host}} — possible tamper"
+
+  # ───────────────────────────────────────────────
+  # GENERIC / TEST
+  # ───────────────────────────────────────────────
+  - id: test_alert
+    name: "TEST_ALERT trigger"
+    condition:
+      match: "TEST_ALERT"
+      threshold: 1
+      timeframe: 60
+    action:
+      webhook_url: ""
+      message_template: "Info: TEST_ALERT observed on {{.host}} — {{.message}}"

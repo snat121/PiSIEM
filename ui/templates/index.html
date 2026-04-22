@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-gray-950 text-gray-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiSIEM Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body class="min-h-screen font-sans">
+<div class="max-w-7xl mx-auto p-6">
+  <header class="flex items-baseline justify-between mb-4 flex-wrap gap-3">
+    <h1 class="text-2xl font-semibold tracking-tight">PiSIEM</h1>
+
+    <div class="flex items-center gap-2 text-sm">
+      <button type="button" id="refresh-btn"
+              class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1 rounded"
+              title="Flush buffer + reload">↻ Refresh</button>
+      <label for="autorefresh" class="text-gray-400">auto</label>
+      <select id="autorefresh" class="bg-gray-800 border border-gray-700 px-2 py-1 rounded">
+        <option value="0">off</option>
+        <option value="300">5 min</option>
+        <option value="600">10 min</option>
+        <option value="900">15 min</option>
+      </select>
+      <span id="last-refresh" class="text-xs text-gray-500"></span>
+    </div>
+  </header>
+
+  <div id="health" class="text-xs text-gray-400 mb-3"></div>
+
+  <section id="stats" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"></section>
+
+  <form id="filters" class="flex flex-wrap gap-2 mb-3 text-sm">
+    <input name="host"        placeholder="host"              class="bg-gray-800 border border-gray-700 px-2 py-1 rounded" />
+    <input name="severity"    placeholder="severity 0-7"      class="bg-gray-800 border border-gray-700 px-2 py-1 rounded w-32" />
+    <select name="source" class="bg-gray-800 border border-gray-700 px-2 py-1 rounded">
+      <option value="">all sources</option>
+      <option value="syslog">syslog</option>
+      <option value="agent">agent</option>
+    </select>
+    <input name="source_file" placeholder="source file"       class="bg-gray-800 border border-gray-700 px-2 py-1 rounded" />
+    <input name="q"           placeholder="search message"    class="bg-gray-800 border border-gray-700 px-2 py-1 rounded flex-1 min-w-[200px]" />
+    <input name="limit"       value="100"                     class="bg-gray-800 border border-gray-700 px-2 py-1 rounded w-24" />
+    <button type="submit" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">apply filters</button>
+  </form>
+
+  <div class="overflow-auto border border-gray-800 rounded">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-900 sticky top-0">
+        <tr class="text-left text-gray-400">
+          <th class="px-2 py-1 font-medium">time</th>
+          <th class="px-2 py-1 font-medium">host</th>
+          <th class="px-2 py-1 font-medium">sev</th>
+          <th class="px-2 py-1 font-medium">source</th>
+          <th class="px-2 py-1 font-medium">file</th>
+          <th class="px-2 py-1 font-medium">message</th>
+        </tr>
+      </thead>
+      <tbody id="logs-body">
+        <tr><td colspan="6" class="px-2 py-4 text-gray-600 text-center">loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  var form           = document.getElementById('filters');
+  var refreshBtn     = document.getElementById('refresh-btn');
+  var intervalSelect = document.getElementById('autorefresh');
+  var lastRefresh    = document.getElementById('last-refresh');
+  var autoTimer      = null;
+
+  function buildLogsURL() {
+    var params = new URLSearchParams(new FormData(form)).toString();
+    return '/api/logs' + (params ? '?' + params : '');
+  }
+
+  function refreshAll() {
+    // htmx.ajax sends HX-Request: true, so handlers return HTML fragments.
+    htmx.ajax('GET', buildLogsURL(), { target: '#logs-body', swap: 'innerHTML' });
+    htmx.ajax('GET', '/api/stats',   { target: '#stats',     swap: 'innerHTML' });
+    htmx.ajax('GET', '/api/health',  { target: '#health',    swap: 'innerHTML' });
+    lastRefresh.textContent = 'updated ' + new Date().toLocaleTimeString();
+  }
+
+  function flushThenRefresh() {
+    fetch('/api/flush', { method: 'POST' })
+      .catch(function () { /* ignore network errors, still refresh */ })
+      .finally(refreshAll);
+  }
+
+  function applyAutoRefresh(seconds) {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    if (seconds > 0) {
+      autoTimer = setInterval(flushThenRefresh, seconds * 1000);
+    }
+  }
+
+  refreshBtn.addEventListener('click', flushThenRefresh);
+
+  intervalSelect.addEventListener('change', function (e) {
+    var s = parseInt(e.target.value, 10) || 0;
+    try { localStorage.setItem('pisiem_autorefresh', String(s)); } catch (_) {}
+    applyAutoRefresh(s);
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    flushThenRefresh();
+  });
+
+  // Restore saved interval and do an initial load.
+  (function init() {
+    try {
+      var saved = parseInt(localStorage.getItem('pisiem_autorefresh') || '0', 10);
+      if ([0, 300, 600, 900].indexOf(saved) !== -1) {
+        intervalSelect.value = String(saved);
+        applyAutoRefresh(saved);
+      }
+    } catch (_) {}
+    flushThenRefresh();
+  })();
+})();
+</script>
+</body>
+</html>

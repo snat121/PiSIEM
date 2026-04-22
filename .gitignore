@@ -1,0 +1,30 @@
+# Build artifacts
+pisiem
+pisiem.exe
+pisiem-agent
+pisiem-agent.exe
+pisiem-*-amd64
+pisiem-*-arm64
+pisiem-*-amd64.exe
+*.bin
+
+# SQLite runtime files
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Logs
+*.log
+
+# Editor / OS cruft
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local configs (keep the tracked samples, ignore operator overrides)
+config.local.yaml
+agent.local.yaml
+rules.local.yaml

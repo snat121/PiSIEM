@@ -1,0 +1,29 @@
+server_host: "127.0.0.1"
+server_port: 5514
+
+# Each watched file maps 1:1 to a file PiSIEM rules can scope by `source_file`.
+# Edit this list for the host running the agent.
+watch_files:
+  # Linux — auth & general
+  - path: "/var/log/auth.log"
+    severity: 4
+  - path: "/var/log/syslog"
+    severity: 6
+
+  # Web server (uncomment on nginx/apache hosts — matches web_* rules)
+  # - path: "/var/log/nginx/access.log"
+  #   severity: 6
+  # - path: "/var/log/nginx/error.log"
+  #   severity: 3
+
+  # Windows — point this at a plain-text export of the Security event log.
+  # Example: a scheduled task running
+  #   wevtutil qe Security /f:text /c:50 >> C:\pisiem\SecurityExport.log
+  # PiSIEM rules match on source_file substring "Security".
+  # - path: "C:/pisiem/SecurityExport.log"
+  #   severity: 3
+
+batch_size: 100
+batch_interval_seconds: 5
+reconnect_max_interval_seconds: 60
+local_buffer_max_events: 10000

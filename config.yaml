@@ -1,0 +1,18 @@
+syslog_udp_port: 514
+syslog_tcp_port: 514
+enable_tcp_syslog: false
+web_port: 8080
+db_path: "./pisiem.db"
+rules_path: "./rules.yaml"
+
+buffer_flush_interval_seconds: 60
+buffer_flush_size: 1000
+
+enable_anomaly_detection: true
+anomaly_multiplier: 10
+anomaly_webhook_url: ""
+
+enable_agent_listener: true
+agent_port: 5514
+
+log_level: "info"
